@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>E-Commerce Agent — Product Catalog</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◆</span>
+        <div class="brand-text">
+          <h1>Product Catalog</h1>
+          <p>Live view of the agentic product-ingestion pipeline</p>
+        </div>
+      </div>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span id="theme-toggle-icon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section id="stats" class="stats" aria-label="Catalog summary"></section>
+
+    <section class="controls" aria-label="Filter products">
+      <input
+        id="search-input"
+        type="search"
+        placeholder="Search title, brand, or category…"
+        aria-label="Search products"
+      />
+      <div class="filter-group" role="group" aria-label="Filter by validation status">
+        <button class="chip is-active" data-filter="status" data-value="all" type="button">All statuses</button>
+        <button class="chip" data-filter="status" data-value="valid" type="button">Valid</button>
+        <button class="chip" data-filter="status" data-value="needs_review" type="button">Needs review</button>
+      </div>
+      <div class="filter-group" role="group" aria-label="Filter by data source">
+        <button class="chip is-active" data-filter="source" data-value="all" type="button">All sources</button>
+        <button class="chip" data-filter="source" data-value="agent" type="button">🤖 Agent-extracted</button>
+        <button class="chip" data-filter="source" data-value="demo" type="button">🧪 Demo data</button>
+      </div>
+    </section>
+
+    <p id="status-line" class="status-line" role="status"></p>
+
+    <section id="grid" class="grid" aria-label="Products"></section>
+  </main>
+
+  <div id="modal-overlay" class="modal-overlay" hidden>
+    <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <button id="modal-close" class="icon-btn modal-close" type="button" aria-label="Close details">✕</button>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
