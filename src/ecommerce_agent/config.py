@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-5"
 
     database_url: str = "sqlite:///./ecommerce_agent.db"
+
+    @field_validator("database_url")
+    @classmethod
+    def _pin_postgres_driver(cls, value: str) -> str:
+        """Render supplies a bare `postgresql://` URL. SQLAlchemy 2.0 maps that to psycopg2 but
+        2.1 maps it to psycopg (v3), which isn't installed - so name the installed driver
+        explicitly. URLs that already name a driver (or aren't Postgres) are left unchanged."""
+        for prefix in ("postgresql://", "postgres://"):
+            if value.startswith(prefix):
+                return "postgresql+psycopg2://" + value[len(prefix) :]
+        return value
 
     google_service_account_file: str | None = None
 
