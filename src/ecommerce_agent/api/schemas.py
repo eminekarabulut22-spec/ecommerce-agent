@@ -3,11 +3,13 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from ecommerce_agent.agent.orchestrator import AgentOutcome, AgentRunResult
 from ecommerce_agent.agent.trace import AgentRunRecord
+from ecommerce_agent.models.order import Order, OrderItem, OrderStatus
 from ecommerce_agent.models.product import Product, ValidationStatus
+from ecommerce_agent.models.user import User
 
 
 class HealthResponse(BaseModel):
@@ -122,3 +124,139 @@ class ProductListItem(BaseModel):
 class ProductListResponse(BaseModel):
     products: list[ProductListItem]
     count: int
+
+
+# --- Auth --------------------------------------------------------------------------------
+
+
+class RegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=254)
+    # bcrypt silently ignores/truncates past 72 bytes - cap here so an over-long password is a
+    # clean 422 instead of a 500 from the hashing call.
+    password: str = Field(min_length=8, max_length=72)
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        value = value.strip().lower()
+        if "@" not in value or value.startswith("@") or value.endswith("@"):
+            raise ValueError("Enter a valid email address.")
+        return value
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str
+    password: str
+
+    @field_validator("email")
+    @classmethod
+    def _normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class UserResponse(BaseModel):
+    id: UUID
+    email: str
+    created_at: datetime
+
+    @classmethod
+    def from_user(cls, user: User) -> "UserResponse":
+        return cls(id=user.id, email=user.email, created_at=user.created_at)
+
+
+# --- Payments --------------------------------------------------------------------------------
+
+
+class CartItemRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    product_id: UUID
+    quantity: int = Field(default=1, ge=1, le=10)
+
+
+class CheckoutSessionRequest(BaseModel):
+    """What the browser may send when starting checkout. `extra="forbid"` means a client that
+    tries to send its own price/amount/currency gets a 422 - the amount always comes from each
+    product row in the database."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[CartItemRequest] = Field(min_length=1, max_length=20)
+
+
+class CheckoutSessionResponse(BaseModel):
+    order_id: UUID
+    checkout_url: str
+
+
+class OrderItemResponse(BaseModel):
+    product_id: UUID
+    title: str
+    quantity: int
+    unit_amount: int
+    amount_subtotal: int
+
+    @classmethod
+    def from_order_item(cls, item: OrderItem, title: str) -> "OrderItemResponse":
+        return cls(
+            product_id=item.product_id,
+            title=title,
+            quantity=item.quantity,
+            unit_amount=item.unit_amount,
+            amount_subtotal=item.amount_subtotal,
+        )
+
+
+class OrderSummaryResponse(BaseModel):
+    order_id: UUID
+    status: OrderStatus
+    amount_total: int
+    currency: str
+    created_at: datetime
+
+    @classmethod
+    def from_order(cls, order: Order) -> "OrderSummaryResponse":
+        return cls(
+            order_id=order.id,
+            status=order.status,
+            amount_total=order.amount_total,
+            currency=order.currency,
+            created_at=order.created_at,
+        )
+
+
+class OrderListResponse(BaseModel):
+    orders: list[OrderSummaryResponse]
+
+
+class OrderDetailResponse(BaseModel):
+    order_id: UUID
+    status: OrderStatus
+    amount_total: int
+    currency: str
+    failure_reason: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    items: list[OrderItemResponse]
+
+    @classmethod
+    def from_order(cls, order: Order, items: list[OrderItemResponse]) -> "OrderDetailResponse":
+        return cls(
+            order_id=order.id,
+            status=order.status,
+            amount_total=order.amount_total,
+            currency=order.currency,
+            failure_reason=order.failure_reason,
+            created_at=order.created_at,
+            updated_at=order.updated_at,
+            items=items,
+        )
+
+
+class WebhookAckResponse(BaseModel):
+    received: bool = True
+    status: str

@@ -1,0 +1,43 @@
+# Render Blueprint for the public demo: one FastAPI web service (which also serves the static
+# frontend) + one PostgreSQL database, both in Frankfurt. Stripe stays in TEST mode.
+#
+# Secrets are `sync: false`: Render asks for them in the dashboard when the Blueprint is created,
+# so they never live in this file. ANTHROPIC_API_KEY is deliberately not listed - without it the
+# public /products/process endpoint returns a clean 502 instead of spending API credits.
+#
+# `pip install -e .` (editable) is required: the app finds frontend/ and data/sample_images/
+# relative to the source tree, which a non-editable install would move into site-packages.
+# Migrations run in the start command because Render's pre-deploy command is paid-plan only;
+# `alembic upgrade head` is a no-op when the schema is already current.
+
+services:
+  - type: web
+    name: ecommerce-agent
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -e .
+    startCommand: alembic upgrade head && uvicorn ecommerce_agent.api.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecommerce-agent-db
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: FRONTEND_BASE_URL      # https://<service>.onrender.com - known after creation
+        sync: false
+      - key: STRIPE_SECRET_KEY      # sk_test_... only; live keys are refused by the app
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET  # whsec_... from the Stripe Dashboard endpoint
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_ID
+        sync: false
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
+        sync: false
+
+databases:
+  - name: ecommerce-agent-db
+    plan: free
+    region: frankfurt

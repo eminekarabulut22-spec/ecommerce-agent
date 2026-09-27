@@ -4,7 +4,7 @@ import pytest
 
 from ecommerce_agent.llm.client import LLMClientError, ProductSearchResult
 from ecommerce_agent.models.product import FieldConfidence, FieldSource, ProductDraft
-from ecommerce_agent.tools.search import search_product_info
+from ecommerce_agent.tools.search import SEARCHABLE_FIELDS, search_product_info
 
 
 class FakeSearchProvider:
@@ -112,28 +112,19 @@ def test_search_picks_the_highest_confidence_result() -> None:
     assert updated.manufacturer.value == "Keychron Inc."
 
 
-def test_search_coerces_numeric_string_price() -> None:
+def test_price_and_currency_are_not_web_searchable() -> None:
+    assert "price" not in SEARCHABLE_FIELDS
+    assert "currency" not in SEARCHABLE_FIELDS
+
     draft = _base_draft()
-    provider = FakeSearchProvider(
-        responses={"price": [ProductSearchResult(field="price", value="49.99", confidence=0.6)]}
-    )
+    provider = FakeSearchProvider()
 
-    updated = search_product_info(draft=draft, fields=["price"], search_provider=provider)
+    with pytest.raises(ValueError, match="non-searchable"):
+        search_product_info(draft=draft, fields=["price"], search_provider=provider)
+    with pytest.raises(ValueError, match="non-searchable"):
+        search_product_info(draft=draft, fields=["currency"], search_provider=provider)
 
-    assert updated.price is not None
-    assert updated.price.value == 49.99
-    assert isinstance(updated.price.value, float)
-
-
-def test_search_skips_unparseable_price() -> None:
-    draft = _base_draft()
-    provider = FakeSearchProvider(
-        responses={"price": [ProductSearchResult(field="price", value="expensive", confidence=0.6)]}
-    )
-
-    updated = search_product_info(draft=draft, fields=["price"], search_provider=provider)
-
-    assert updated.price is None
+    assert provider.calls == []
 
 
 def test_search_rejects_unknown_field_without_calling_provider() -> None:

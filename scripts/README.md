@@ -21,13 +21,13 @@ CLI entry points for running the project outside the test suite.
   python scripts/batch_process_images.py --dir some/other/dir --url http://localhost:8000
   ```
 
-- `seed_demo_products.py` - inserts 5 demo products directly into the database (no running API,
-  no Anthropic/external API calls). Each product is built from one of the sample images in
-  `data/sample_images/` (`bisiklet.jpeg`, `buzpateni.jpeg`, `snorkel.webp`, `stuhl.webp`,
-  `tisch.webp`); titles, categories, descriptions, and prices are generic placeholders derived
-  only from the filenames - no brand, model number, GTIN, or precise spec is invented. Each
-  product gets a stable id derived from its image filename, so re-running the script upserts the
-  same 5 rows instead of creating duplicates.
+- `seed_demo_products.py` - inserts demo products directly into the database (no running API,
+  no Anthropic/external API calls). Each product is built from an existing file in
+  `data/sample_images/`; titles, categories, descriptions, and prices are generic placeholders
+  derived only from the filenames - no brand, model number, GTIN, or precise spec is invented.
+  Prices are explicit demo selling prices, not AI-extracted. Each product gets a stable id
+  derived from its image filename, so re-running the script upserts the same rows instead of
+  creating duplicates.
 
   ```bash
   python scripts/seed_demo_products.py                                     # seeds DATABASE_URL from .env

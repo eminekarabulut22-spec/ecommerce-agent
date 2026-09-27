@@ -38,6 +38,10 @@ def _validate_gtin_format(gtin: str) -> str | None:
     return None
 
 
+def is_iso_currency_code(currency: str) -> bool:
+    return bool(_CURRENCY_CODE_RE.match(currency))
+
+
 def _validate_price_and_currency(price: float | None, currency: str | None) -> list[str]:
     errors: list[str] = []
     if price is not None and price <= 0:

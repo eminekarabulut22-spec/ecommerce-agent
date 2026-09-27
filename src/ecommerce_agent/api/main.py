@@ -1,14 +1,17 @@
+import logging
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from ecommerce_agent.agent.orchestrator import ProductAgent
+from ecommerce_agent.api.auth import router as auth_router
 from ecommerce_agent.api.dependencies import get_db_session, get_product_agent
+from ecommerce_agent.api.payments import router as payments_router
 from ecommerce_agent.api.schemas import (
     ErrorResponse,
     HealthResponse,
@@ -16,8 +19,12 @@ from ecommerce_agent.api.schemas import (
     ProductListItem,
     ProductListResponse,
 )
+from ecommerce_agent.config import get_settings
 from ecommerce_agent.db import repository
 from ecommerce_agent.llm.client import ImageMediaType, LLMClientError
+from ecommerce_agent.tools.validation import is_iso_currency_code
+
+logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _SAMPLE_IMAGES_DIR = _REPO_ROOT / "data" / "sample_images"
@@ -47,6 +54,12 @@ if _SAMPLE_IMAGES_DIR.is_dir():
 # Those are reported as normal 200 responses whose body carries the outcome, since the endpoint
 # did what was asked. The handlers below cover what's left: things that stop the agent from
 # running at all (a bad upload, credentials/dependency setup, the database being unreachable).
+# Outside development the raw exception text (which can contain SQL or connection details) is
+# only logged, never returned to the client.
+
+
+def _error_detail(exc: Exception, generic: str) -> str:
+    return str(exc) if get_settings().app_env == "development" else generic
 
 
 @app.exception_handler(LLMClientError)
@@ -59,17 +72,23 @@ async def handle_llm_client_error(request: Request, exc: LLMClientError) -> JSON
 
 @app.exception_handler(SQLAlchemyError)
 async def handle_database_error(request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    logger.exception("Database error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=503,
-        content=ErrorResponse(error="database_error", detail=str(exc)).model_dump(),
+        content=ErrorResponse(
+            error="database_error", detail=_error_detail(exc, "Database unavailable.")
+        ).model_dump(),
     )
 
 
 @app.exception_handler(Exception)
 async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,
-        content=ErrorResponse(error="internal_error", detail=str(exc)).model_dump(),
+        content=ErrorResponse(
+            error="internal_error", detail=_error_detail(exc, "Internal server error.")
+        ).model_dump(),
     )
 
 
@@ -98,6 +117,8 @@ def list_products(
 )
 async def process_product(
     image: Annotated[UploadFile, File(description="Product photo (jpeg/png/webp/gif)")],
+    price: Annotated[float, Form(description="Business-provided selling price")],
+    currency: Annotated[str, Form(description="Business-provided 3-letter ISO currency code")],
     agent: Annotated[ProductAgent, Depends(get_product_agent)],
 ) -> ProcessProductResponse:
     if image.content_type not in _ALLOWED_IMAGE_MEDIA_TYPES:
@@ -107,6 +128,13 @@ async def process_product(
                 f"Unsupported image type '{image.content_type}'. "
                 f"Allowed: {sorted(_ALLOWED_IMAGE_MEDIA_TYPES)}."
             ),
+        )
+
+    normalized_currency = currency.strip().upper()
+    if not is_iso_currency_code(normalized_currency):
+        raise HTTPException(
+            status_code=400,
+            detail="currency must be a 3-letter ISO code (for example USD).",
         )
 
     image_bytes = await image.read()
@@ -123,8 +151,14 @@ async def process_product(
         image_bytes=image_bytes,
         image_media_type=media_type,
         source_image_url=image.filename or "uploaded-image",
+        price=price,
+        currency=normalized_currency,
     )
     return ProcessProductResponse.from_agent_result(result)
+
+
+app.include_router(auth_router)
+app.include_router(payments_router)
 
 
 # Serves the static catalog frontend. Mounted last, at "/", so it only ever catches requests

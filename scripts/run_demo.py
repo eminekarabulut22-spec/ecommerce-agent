@@ -21,6 +21,12 @@ def main() -> int:
     parser.add_argument(
         "--url", default="http://localhost:8000", help="Base URL of the running API"
     )
+    parser.add_argument("--price", type=float, required=True, help="Business-provided selling price")
+    parser.add_argument(
+        "--currency",
+        default="USD",
+        help="Business-provided 3-letter currency code (default: USD)",
+    )
     args = parser.parse_args()
 
     if not args.image_path.is_file():
@@ -33,6 +39,7 @@ def main() -> int:
         response = httpx.post(
             f"{args.url}/products/process",
             files={"image": (args.image_path.name, image_file, media_type)},
+            data={"price": str(args.price), "currency": args.currency},
             timeout=120.0,
         )
 

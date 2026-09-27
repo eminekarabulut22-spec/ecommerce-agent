@@ -17,6 +17,7 @@ const els = {
   modalClose: document.getElementById("modal-close"),
   themeToggle: document.getElementById("theme-toggle"),
   themeToggleIcon: document.getElementById("theme-toggle-icon"),
+  checkoutBanner: document.getElementById("checkout-banner"),
 };
 
 function escapeHtml(value) {
@@ -44,6 +45,22 @@ function formatPrice(price, currency) {
   }
 }
 
+function priceBlockHTML(price, currency) {
+  const formatted = formatPrice(price, currency);
+  if (!formatted) {
+    return `<span class="card-price is-missing">Price not available</span>`;
+  }
+  return `
+    <span class="price-block">
+      <span class="card-price">${escapeHtml(formatted)}</span>
+      <span class="price-source">Business price</span>
+    </span>`;
+}
+
+function isExtractionConfidenceField(field) {
+  return field !== "price" && field !== "currency";
+}
+
 function formatDate(iso) {
   try {
     return new Date(iso).toLocaleString(undefined, {
@@ -56,7 +73,9 @@ function formatDate(iso) {
 }
 
 function averageConfidence(scores) {
-  const values = Object.values(scores || {});
+  const values = Object.entries(scores || {})
+    .filter(([field]) => isExtractionConfidenceField(field))
+    .map(([, score]) => score);
   if (values.length === 0) return null;
   return values.reduce((a, b) => a + b, 0) / values.length;
 }
@@ -141,7 +160,6 @@ function applyFilters() {
 // --- Grid / cards ------------------------------------------------------------------------
 
 function productCardHTML(product) {
-  const price = formatPrice(product.price, product.currency);
   const avgConfidence = averageConfidence(product.confidence_scores);
   const statusBadge =
     product.validation_status === "valid"
@@ -169,11 +187,7 @@ function productCardHTML(product) {
         <div class="card-title">${escapeHtml(product.title)}</div>
         ${subtitle ? `<div class="card-brand">${escapeHtml(subtitle)}</div>` : ""}
         <div class="card-footer">
-          ${
-            price
-              ? `<span class="card-price">${escapeHtml(price)}</span>`
-              : `<span class="card-price is-missing">Price not available</span>`
-          }
+          ${priceBlockHTML(product.price, product.currency)}
           ${
             avgConfidence !== null
               ? `<span class="confidence-pill">
@@ -235,7 +249,10 @@ function confidenceRowHTML(field, score) {
 }
 
 function openModal(product) {
-  const price = formatPrice(product.price, product.currency);
+  const formattedPrice = formatPrice(product.price, product.currency);
+  const priceDisplay = formattedPrice
+    ? `${formattedPrice} (business-provided)`
+    : null;
   const statusBadge =
     product.validation_status === "valid"
       ? '<span class="badge badge-valid">✓ Valid</span>'
@@ -248,14 +265,14 @@ function openModal(product) {
     ["Category", product.category],
     ["Brand", product.brand],
     ["Manufacturer", product.manufacturer],
-    ["Price", price],
+    ["Price", priceDisplay],
     ["Extraction model", product.extraction_model || "—"],
     ["Created", formatDate(product.created_at)],
   ].filter(([, value]) => value);
 
-  const confidenceEntries = Object.entries(product.confidence_scores || {}).sort(
-    (a, b) => a[1] - b[1]
-  );
+  const confidenceEntries = Object.entries(product.confidence_scores || {})
+    .filter(([field]) => isExtractionConfidenceField(field))
+    .sort((a, b) => a[1] - b[1]);
 
   els.modalBody.innerHTML = `
     <img class="modal-image" src="${escapeHtml(product.image_url)}" alt="${escapeHtml(product.title)}"
@@ -282,6 +299,8 @@ function openModal(product) {
             .join("")}
         </div>
       </div>
+
+      ${buySectionHTML(product)}
 
       ${
         product.tags && product.tags.length
@@ -315,6 +334,11 @@ function openModal(product) {
       }
     </div>`;
 
+  const addToCartButton = els.modalBody.querySelector("#add-to-cart-button");
+  if (addToCartButton) {
+    addToCartButton.addEventListener("click", () => addProductToCart(product, addToCartButton));
+  }
+
   els.modalOverlay.hidden = false;
   document.body.style.overflow = "hidden";
 }
@@ -322,6 +346,110 @@ function openModal(product) {
 function closeModal() {
   els.modalOverlay.hidden = true;
   document.body.style.overflow = "";
+}
+
+// --- Cart (test payments happen from the Cart page; see cart.js) --------------------------
+//
+// This button only ever adds a product id/quantity to the browser's local cart. Pricing,
+// order creation, and the Stripe Checkout Session are all handled server-side once the
+// shopper proceeds to checkout from the cart.
+
+function purchaseBlocker(product) {
+  if (product.price === null || product.price === undefined || !product.currency) {
+    return "This product has no price, so it can't be bought.";
+  }
+  if (product.validation_status !== "valid") {
+    return "This product still needs review, so it can't be bought yet.";
+  }
+  return null;
+}
+
+function buySectionHTML(product) {
+  const blocker = purchaseBlocker(product);
+  return `
+    <div class="buy-section">
+      <div class="modal-section-label">Test payment</div>
+      <button id="add-to-cart-button" class="btn-primary" type="button" ${blocker ? "disabled" : ""}>
+        Add to cart
+      </button>
+      <p class="buy-note">
+        ${escapeHtml(blocker || "Stripe test mode — no real money is charged. Use card 4242 4242 4242 4242.")}
+      </p>
+      <p id="buy-error" class="buy-error" role="alert" hidden></p>
+    </div>`;
+}
+
+function addProductToCart(product, button) {
+  addToCart(product.id, 1);
+  button.textContent = "Added ✓";
+  button.disabled = true;
+  setTimeout(() => {
+    button.textContent = "Add to cart";
+    button.disabled = false;
+  }, 1200);
+}
+
+function formatMinorAmount(amount, currency) {
+  try {
+    const formatter = new Intl.NumberFormat(undefined, { style: "currency", currency });
+    const digits = formatter.resolvedOptions().maximumFractionDigits;
+    return formatter.format(amount / 10 ** digits);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+function showCheckoutBanner(kind, message) {
+  els.checkoutBanner.className = `checkout-banner is-${kind}`;
+  els.checkoutBanner.textContent = message;
+  els.checkoutBanner.hidden = false;
+}
+
+async function fetchOrder(orderId) {
+  const response = await fetch(`/payments/orders/${encodeURIComponent(orderId)}`);
+  if (!response.ok) throw new Error(`Server responded with HTTP ${response.status}`);
+  return response.json();
+}
+
+async function handleCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const outcome = params.get("checkout");
+  const orderId = params.get("order_id");
+  if (!outcome || !orderId) return;
+
+  // Drop the query string so a reload doesn't re-run this.
+  window.history.replaceState(null, "", window.location.pathname);
+
+  if (outcome === "cancel") {
+    showCheckoutBanner("neutral", "Checkout cancelled — you were not charged.");
+    return;
+  }
+
+  showCheckoutBanner("neutral", "Confirming your test payment…");
+  // The webhook usually lands within a second or two of the redirect; poll briefly for it.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const order = await fetchOrder(orderId);
+      const amount = formatMinorAmount(order.amount_total, order.currency);
+      if (order.status === "paid") {
+        showCheckoutBanner("success", `Test payment succeeded — ${amount} (order ${order.order_id}).`);
+        return;
+      }
+      if (order.status === "failed") {
+        showCheckoutBanner("error", `Test payment failed: ${order.failure_reason || "unknown reason"}`);
+        return;
+      }
+    } catch (err) {
+      showCheckoutBanner("error", `Couldn't check the order status (${err.message}).`);
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  showCheckoutBanner(
+    "warning",
+    "Payment submitted, but the order is still pending — the Stripe webhook hasn't arrived yet. " +
+      "Is `stripe listen` running?"
+  );
 }
 
 // --- Theme --------------------------------------------------------------------------------
@@ -356,6 +484,7 @@ function initTheme() {
 
 function init() {
   initTheme();
+  initNav("products");
 
   els.searchInput.addEventListener("input", (e) => {
     state.search = e.target.value;
@@ -383,6 +512,7 @@ function init() {
   });
 
   loadProducts();
+  handleCheckoutReturn();
 }
 
 init();

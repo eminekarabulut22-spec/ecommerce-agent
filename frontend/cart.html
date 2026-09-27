@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cart — E-Commerce Agent</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◆</span>
+        <div class="brand-text">
+          <h1>Cart</h1>
+          <p>Review your items before checkout</p>
+        </div>
+      </div>
+      <nav id="site-nav" class="site-nav" aria-label="Main navigation"></nav>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span id="theme-toggle-icon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div id="cart-list" class="cart-list" aria-label="Cart items"></div>
+
+    <div id="cart-empty" class="empty-state" hidden>
+      <h3>Your cart is empty</h3>
+      <p>Add a product from the <a href="/">catalog</a> to get started.</p>
+    </div>
+
+    <div id="cart-total-row" class="cart-total-row" hidden>
+      <span>Total</span>
+      <strong id="cart-total-amount">—</strong>
+    </div>
+
+    <button id="checkout-button" class="btn-primary" type="button" disabled>
+      Proceed to checkout
+    </button>
+    <p id="checkout-error" class="buy-error" role="alert" hidden></p>
+  </main>
+
+  <script src="/nav.js"></script>
+  <script src="/format.js"></script>
+  <script src="/theme.js"></script>
+  <script src="/cart.js"></script>
+</body>
+</html>

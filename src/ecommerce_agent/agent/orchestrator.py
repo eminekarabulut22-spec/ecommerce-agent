@@ -10,7 +10,7 @@ from ecommerce_agent.agent.trace import AgentRunRecord, TraceRecorder
 from ecommerce_agent.config import get_settings
 from ecommerce_agent.llm.client import ImageMediaType, LLMClient, LLMClientError
 from ecommerce_agent.llm.client import SearchProvider
-from ecommerce_agent.models.product import Product, ProductDraft
+from ecommerce_agent.models.product import FieldConfidence, FieldSource, Product, ProductDraft
 from ecommerce_agent.tools.duplicates import DuplicateCheckResult, check_duplicate_product
 from ecommerce_agent.tools.extraction import ProductExtractionError, extract_product_attributes
 from ecommerce_agent.tools.persistence import flag_for_human_review, save_product
@@ -29,17 +29,22 @@ You are an autonomous e-commerce product data agent. A vision model has already 
 initial product draft from a photograph; your job is to decide, one tool call at a time, what \
 to do with it until it is either saved or flagged for human review.
 
+Price and currency are business-controlled inputs already present on the draft. Never search \
+the web for price or currency, never change those values, and never treat a price visible in \
+the photo as the selling price.
+
 You have five tools. Call exactly one tool per turn - never reply with plain text only, and \
 never request more than one tool call at once.
 
 There is no fixed order - decide based on what the current draft actually needs:
-- If a field that matters for validity (category, price, currency, gtin) is missing or has low \
+- If a field that matters for validity (category, gtin) is missing or has low \
   confidence, and you have not already searched for it in this run, search_product_info can \
-  look it up.
+  look it up. search_product_info cannot look up price or currency.
 - validate_product runs deterministic rule checks (required fields, price/currency \
   consistency, GTIN format and checksum, confidence thresholds) against the CURRENT draft. Call \
   it whenever you want an authoritative read on whether the draft is currently valid - including \
-  again after search_product_info changes something.
+  again after search_product_info changes something. It still validates the business-provided \
+  price and currency.
 - check_duplicate_product looks up whether a product with the same GTIN already exists.
 - save_product persists the draft as a final, valid product. It is a terminal action.
 - flag_for_human_review persists the draft marked for review with a short reason you provide. \
@@ -63,7 +68,7 @@ AGENT_TOOLS: list[dict[str, Any]] = [
             "have low confidence in the draft. Only request fields that are actually absent or "
             "uncertain - do not re-request a field you already have confidently, and do not "
             "request a field you have already searched for earlier in this run if it did not "
-            "help."
+            "help. Price and currency are business-provided and cannot be searched."
         ),
         "input_schema": {
             "type": "object",
@@ -152,6 +157,19 @@ class _AgentState:
     validation: ValidationResult | None = None
     duplicate_result: DuplicateCheckResult | None = None
     searched_fields: set[str] = field(default_factory=set)
+
+
+def _apply_business_pricing(draft: ProductDraft, *, price: float, currency: str) -> ProductDraft:
+    """Stamp business-provided selling price/currency onto the draft. These values are never
+    taken from vision extraction or web search."""
+    updated = draft.model_copy(deep=True)
+    updated.price = FieldConfidence(value=price, confidence=1.0, source=FieldSource.BUSINESS)
+    updated.currency = FieldConfidence(
+        value=currency.strip().upper(),
+        confidence=1.0,
+        source=FieldSource.BUSINESS,
+    )
+    return updated
 
 
 def _draft_summary(draft: ProductDraft, threshold: float) -> dict[str, Any]:
@@ -243,6 +261,8 @@ class ProductAgent:
         image_bytes: bytes,
         image_media_type: ImageMediaType,
         source_image_url: str,
+        price: float,
+        currency: str,
     ) -> AgentRunResult:
         trace = TraceRecorder(source_image_url=source_image_url)
         iteration = 1
@@ -279,6 +299,8 @@ class ProductAgent:
             input_summary=extraction_input_summary,
             output_summary=_draft_summary(draft, self._threshold),
         )
+
+        draft = _apply_business_pricing(draft, price=price, currency=currency)
 
         state = _AgentState(draft=draft)
         history: list[dict[str, Any]] = [

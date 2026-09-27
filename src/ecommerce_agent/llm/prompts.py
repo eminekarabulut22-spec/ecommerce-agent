@@ -8,7 +8,10 @@ Rules:
 - Only report a field if it is visually supported by the image itself (printed text, packaging, \
   clearly depicted material/shape/color, etc.). If you cannot determine a field from the image \
   alone, omit it entirely rather than guessing.
-- Never invent a brand, price, or GTIN/barcode you cannot actually see printed or depicted.
+- Never invent a brand or GTIN/barcode you cannot actually see printed or depicted.
+- Do not extract, guess, or report a selling price or currency. Selling price is provided by the \
+  business, not inferred from the photo. If a price tag or currency symbol is visible, ignore it \
+  as a selling-price source.
 - For every field you do report, include a confidence score between 0.0 and 1.0 reflecting how \
   certain you are, based purely on visual evidence in this image.
 - Category should be a short breadcrumb, e.g. "Electronics > Computer Accessories > Keyboards".
@@ -21,7 +24,8 @@ PRODUCT_EXTRACTION_TOOL_NAME = "record_product_draft"
 
 PRODUCT_EXTRACTION_TOOL_DESCRIPTION = (
     "Record the product attributes visible in the image, each paired with a confidence score "
-    "between 0 and 1. Omit any field that cannot be determined from the image."
+    "between 0 and 1. Omit any field that cannot be determined from the image. Do not record "
+    "price or currency."
 )
 
 
@@ -31,18 +35,6 @@ def _confident_string(description: str) -> dict[str, Any]:
         "description": description,
         "properties": {
             "value": {"type": "string"},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-        },
-        "required": ["value", "confidence"],
-    }
-
-
-def _confident_number(description: str) -> dict[str, Any]:
-    return {
-        "type": "object",
-        "description": description,
-        "properties": {
-            "value": {"type": "number", "minimum": 0},
             "confidence": {"type": "number", "minimum": 0, "maximum": 1},
         },
         "required": ["value", "confidence"],
@@ -95,8 +87,6 @@ PRODUCT_EXTRACTION_TOOL_SCHEMA: dict[str, Any] = {
         "material": _confident_string("The primary visible material, e.g. 'aluminum', 'cotton'."),
         "dimensions": _confident_string("Approximate physical dimensions, if visually estimable."),
         "weight": _confident_string("Approximate weight, only if stated on packaging."),
-        "price": _confident_number("The price, only if visibly printed on a tag or packaging."),
-        "currency": _confident_string("The ISO currency code matching any visible price."),
         "gtin": _confident_string("A barcode/GTIN number, only if clearly legible in the image."),
         "tags": {
             "type": "array",

@@ -17,7 +17,8 @@ def get_engine() -> Engine:
     if _engine is None:
         database_url = get_settings().database_url
         connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
-        _engine = create_engine(database_url, connect_args=connect_args)
+        # pool_pre_ping: drop connections the server closed while idle (e.g. a sleeping host).
+        _engine = create_engine(database_url, connect_args=connect_args, pool_pre_ping=True)
     return _engine
 
 

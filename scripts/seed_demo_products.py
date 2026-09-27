@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Seed the database with 5 demo products for local development and manual testing.
+"""Seed the database with demo products for local development and manual testing.
 
-The 5 products are built entirely from local sample images in `data/sample_images/` - titles,
+The products are built entirely from local sample images in `data/sample_images/` - titles,
 categories, descriptions, and prices are generic placeholders derived only from the image
 filenames (no brand, model number, GTIN, or precise spec is invented). This script never calls
 Anthropic or any other external API; it only writes rows to the configured database.
@@ -13,7 +13,7 @@ Usage:
     python scripts/seed_demo_products.py --database-url sqlite:///./demo.db  # seeds a specific DB
 
 Re-running is safe: each demo product has a stable id derived from its image filename, so a
-second run updates the same 5 rows in place (via the existing upsert-by-id save) instead of
+second run updates the same rows in place (via the existing upsert-by-id save) instead of
 inserting duplicates.
 """
 
@@ -108,6 +108,62 @@ DEMO_PRODUCT_SPECS: tuple[DemoProductSpec, ...] = (
         currency="USD",
         tags=("demo", "sample-data", "table", "furniture"),
     ),
+    DemoProductSpec(
+        image_filename="kiehls.jpeg",
+        title="Demo Face Cream",
+        description=(
+            "Sample skincare cream used for local demos and testing. Placeholder data, "
+            "not a real product."
+        ),
+        category="Beauty > Skincare > Face Cream",
+        price=34.00,
+        currency="USD",
+        tags=("demo", "sample-data", "skincare", "cream"),
+    ),
+    DemoProductSpec(
+        image_filename="macruj.jpeg",
+        title="Demo Lip Color",
+        description=(
+            "Sample lip color used for local demos and testing. Placeholder data, not a real product."
+        ),
+        category="Beauty > Makeup > Lip Color",
+        price=18.00,
+        currency="USD",
+        tags=("demo", "sample-data", "makeup", "lip-color"),
+    ),
+    DemoProductSpec(
+        image_filename="parfume.jpeg",
+        title="Demo Fragrance",
+        description=(
+            "Sample fragrance used for local demos and testing. Placeholder data, not a real product."
+        ),
+        category="Beauty > Fragrance",
+        price=72.00,
+        currency="USD",
+        tags=("demo", "sample-data", "fragrance", "perfume"),
+    ),
+    DemoProductSpec(
+        image_filename="teddy.webp",
+        title="Demo Plush Toy",
+        description=(
+            "Sample plush toy used for local demos and testing. Placeholder data, not a real product."
+        ),
+        category="Toys > Stuffed Animals",
+        price=22.00,
+        currency="USD",
+        tags=("demo", "sample-data", "plush", "toy"),
+    ),
+    DemoProductSpec(
+        image_filename="1_org_zoom.webp",
+        title="Demo Zoom Accessory",
+        description=(
+            "Sample accessory used for local demos and testing. Placeholder data, not a real product."
+        ),
+        category="Electronics > Camera Accessories",
+        price=39.00,
+        currency="USD",
+        tags=("demo", "sample-data", "accessory", "electronics"),
+    ),
 )
 
 
@@ -120,7 +176,7 @@ def _source_image_url(image_filename: str) -> str:
 
 
 def build_demo_products() -> list[Product]:
-    """Build the 5 demo `Product` records, deterministic-validation-status applied.
+    """Build the demo `Product` records, deterministic-validation-status applied.
 
     Pure - touches neither the database nor the network, so it's easy to unit test in isolation.
     """

@@ -51,7 +51,14 @@ def _error_detail(response: httpx.Response) -> str:
     return payload.get("detail") or payload.get("error") or str(payload)
 
 
-def process_image(client: httpx.Client, image_path: Path, *, base_url: str) -> BatchResult:
+def process_image(
+    client: httpx.Client,
+    image_path: Path,
+    *,
+    base_url: str,
+    price: float = 19.99,
+    currency: str = "USD",
+) -> BatchResult:
     """Send one image to /products/process and turn the response into a BatchResult.
 
     Never raises: network errors and non-200 responses are captured in the result so the
@@ -64,6 +71,7 @@ def process_image(client: httpx.Client, image_path: Path, *, base_url: str) -> B
             response = client.post(
                 f"{base_url}{ENDPOINT_PATH}",
                 files={"image": (image_path.name, image_file, media_type)},
+                data={"price": str(price), "currency": currency},
                 timeout=httpx.Timeout(300.0, connect=10.0),
             )
     except httpx.HTTPError as exc:
@@ -97,14 +105,23 @@ def format_result(result: BatchResult) -> str:
     return " | ".join(parts)
 
 
-def run_batch(directory: Path, *, base_url: str, client: httpx.Client | None = None) -> list[BatchResult]:
+def run_batch(
+    directory: Path,
+    *,
+    base_url: str,
+    client: httpx.Client | None = None,
+    price: float = 19.99,
+    currency: str = "USD",
+) -> list[BatchResult]:
     images = iter_supported_images(directory)
     owns_client = client is None
     client = client or httpx.Client()
     results: list[BatchResult] = []
     try:
         for image_path in images:
-            result = process_image(client, image_path, base_url=base_url)
+            result = process_image(
+                client, image_path, base_url=base_url, price=price, currency=currency
+            )
             results.append(result)
             print(format_result(result))
     finally:
@@ -122,13 +139,24 @@ def main(argv: list[str] | None = None) -> int:
         help="Directory of product images to process (default: data/sample_images)",
     )
     parser.add_argument("--url", default="http://localhost:8000", help="Base URL of the running API")
+    parser.add_argument(
+        "--price",
+        type=float,
+        default=19.99,
+        help="Business-provided selling price sent with every image (default: 19.99)",
+    )
+    parser.add_argument(
+        "--currency",
+        default="USD",
+        help="Business-provided 3-letter currency code sent with every image (default: USD)",
+    )
     args = parser.parse_args(argv)
 
     if not args.dir.is_dir():
         print(f"No such directory: {args.dir}", file=sys.stderr)
         return 1
 
-    results = run_batch(args.dir, base_url=args.url)
+    results = run_batch(args.dir, base_url=args.url, price=args.price, currency=args.currency)
 
     failed = sum(1 for r in results if r.outcome is None)
     print(f"\nProcessed {len(results)} image(s); {failed} failed to reach the agent.")

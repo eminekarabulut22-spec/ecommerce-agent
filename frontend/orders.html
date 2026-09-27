@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Orders — E-Commerce Agent</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">◆</span>
+        <div class="brand-text">
+          <h1>Orders</h1>
+          <p>Your past test purchases</p>
+        </div>
+      </div>
+      <nav id="site-nav" class="site-nav" aria-label="Main navigation"></nav>
+      <button id="theme-toggle" class="icon-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+        <span id="theme-toggle-icon">🌙</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div id="orders-signed-out" class="empty-state" hidden>
+      <h3>Sign in to see your orders</h3>
+      <p><a href="/account.html?next=orders">Sign in or create an account</a>.</p>
+    </div>
+
+    <div id="orders-empty" class="empty-state" hidden>
+      <h3>No orders yet</h3>
+      <p>Orders you complete through checkout will show up here.</p>
+    </div>
+
+    <div id="orders-list" class="orders-list" aria-label="Orders"></div>
+  </main>
+
+  <script src="/nav.js"></script>
+  <script src="/format.js"></script>
+  <script src="/theme.js"></script>
+  <script src="/orders.js"></script>
+</body>
+</html>

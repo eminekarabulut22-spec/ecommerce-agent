@@ -17,6 +17,7 @@ class FieldSource(str, Enum):
     VISION_EXTRACTION = "vision_extraction"
     WEB_SEARCH = "web_search"
     MANUAL = "manual"
+    BUSINESS = "business"
 
 
 class ValidationStatus(str, Enum):

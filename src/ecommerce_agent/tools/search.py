@@ -13,12 +13,8 @@ SEARCHABLE_FIELDS = (
     "material",
     "dimensions",
     "weight",
-    "price",
-    "currency",
     "gtin",
 )
-
-_NUMERIC_FIELDS = {"price"}
 
 
 def _draft_context(draft: ProductDraft) -> dict[str, Any]:
@@ -27,16 +23,6 @@ def _draft_context(draft: ProductDraft) -> dict[str, Any]:
         for name in SEARCHABLE_FIELDS
         if getattr(draft, name) is not None
     }
-
-
-def _coerce_value(field_name: str, value: Any) -> Any | None:
-    """Return `value` in the type that field expects, or None if it can't be coerced."""
-    if field_name in _NUMERIC_FIELDS and not isinstance(value, (int, float)):
-        try:
-            return float(value)
-        except (TypeError, ValueError):
-            return None
-    return value
 
 
 def _best_result(results: list[ProductSearchResult]) -> ProductSearchResult | None:
@@ -73,7 +59,7 @@ def search_product_info(
         if best is None:
             continue
 
-        value = _coerce_value(field_name, best.value)
+        value = best.value
         if value is None:
             continue
 

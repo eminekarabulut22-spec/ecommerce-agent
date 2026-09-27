@@ -77,8 +77,8 @@ def test_extract_product_attributes_success() -> None:
     assert draft.brand is not None
     assert draft.brand.confidence == 0.4
 
-    assert draft.price is not None
-    assert draft.price.value == 89.99
+    assert draft.price is None
+    assert draft.currency is None
 
     assert draft.manufacturer is None
     assert draft.gtin is None
@@ -104,6 +104,10 @@ def test_extract_product_attributes_encodes_image_and_forwards_call_details() ->
     assert base64.standard_b64decode(sent_b64) == raw_bytes
     assert llm_client.last_call_kwargs["image_media_type"] == "image/png"
     assert llm_client.last_call_kwargs["tool_name"] == "record_product_draft"
+    schema_properties = llm_client.last_call_kwargs["tool_schema"]["properties"]
+    assert "price" not in schema_properties
+    assert "currency" not in schema_properties
+    assert "do not extract" in llm_client.last_call_kwargs["system_prompt"].lower()
 
 
 def test_extract_product_attributes_minimal_payload_leaves_optional_fields_none() -> None:
@@ -154,7 +158,7 @@ def test_extract_product_attributes_raises_on_wrong_value_type() -> None:
     llm_client = FakeLLMClient(
         payload={
             "title": {"value": "Keyboard", "confidence": 0.9},
-            "price": {"value": "expensive", "confidence": 0.5},
+            "brand": {"value": 123, "confidence": 0.5},
         }
     )
 

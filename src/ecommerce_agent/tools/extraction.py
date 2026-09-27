@@ -23,11 +23,6 @@ class _ExtractedStringField(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
-class _ExtractedPriceField(BaseModel):
-    value: float = Field(ge=0)
-    confidence: float = Field(ge=0.0, le=1.0)
-
-
 class _ExtractedPayload(BaseModel):
     """Validates the raw tool-call input. Keep in sync with PRODUCT_EXTRACTION_TOOL_SCHEMA."""
 
@@ -40,8 +35,6 @@ class _ExtractedPayload(BaseModel):
     material: _ExtractedStringField | None = None
     dimensions: _ExtractedStringField | None = None
     weight: _ExtractedStringField | None = None
-    price: _ExtractedPriceField | None = None
-    currency: _ExtractedStringField | None = None
     gtin: _ExtractedStringField | None = None
     tags: list[str] = Field(default_factory=list)
 
@@ -75,7 +68,7 @@ class _ExtractedPayload(BaseModel):
 
 
 def _to_field_confidence(
-    extracted: _ExtractedStringField | _ExtractedPriceField | None,
+    extracted: _ExtractedStringField | None,
 ) -> FieldConfidence | None:
     if extracted is None:
         return None
@@ -103,8 +96,6 @@ def _payload_to_draft(
         material=_to_field_confidence(payload.material),
         dimensions=_to_field_confidence(payload.dimensions),
         weight=_to_field_confidence(payload.weight),
-        price=_to_field_confidence(payload.price),
-        currency=_to_field_confidence(payload.currency),
         gtin=_to_field_confidence(payload.gtin),
         tags=payload.tags,
         raw_llm_responses=[raw_response],

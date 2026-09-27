@@ -2,10 +2,10 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from ecommerce_agent.agent.orchestrator import AgentOutcome, ProductAgent
+from ecommerce_agent.agent.orchestrator import AGENT_SYSTEM_PROMPT, AGENT_TOOLS, AgentOutcome, ProductAgent
 from ecommerce_agent.db import repository
 from ecommerce_agent.llm.client import AgentToolUse, AgentTurnResult, LLMClientError, ProductSearchResult
-from ecommerce_agent.models.product import Product, ValidationStatus
+from ecommerce_agent.models.product import FieldSource, Product, ValidationStatus
 
 
 class FakeAgentLLMClient:
@@ -88,10 +88,11 @@ class FakeSearchProvider:
 FULL_VALID_PAYLOAD = {
     "title": {"value": "Wireless Mechanical Keyboard", "confidence": 0.95},
     "category": {"value": "Electronics > Keyboards", "confidence": 0.9},
-    "price": {"value": 89.99, "confidence": 0.85},
-    "currency": {"value": "USD", "confidence": 0.85},
     "gtin": {"value": "00012345678905", "confidence": 0.9},
 }
+
+BUSINESS_PRICE = 89.99
+BUSINESS_CURRENCY = "USD"
 
 
 def _agent(
@@ -101,6 +102,18 @@ def _agent(
     **kwargs: Any,
 ) -> ProductAgent:
     return ProductAgent(llm_client=llm_client, search_provider=search_provider, session=session, **kwargs)
+
+
+def _run(agent: ProductAgent, *, source_image_url: str, **kwargs: Any):
+    params = dict(
+        image_bytes=b"img",
+        image_media_type="image/jpeg",
+        source_image_url=source_image_url,
+        price=BUSINESS_PRICE,
+        currency=BUSINESS_CURRENCY,
+    )
+    params.update(kwargs)
+    return agent.run(**params)
 
 
 # --- Scenario A: duplicate check -> validate -> save -------------------------------------

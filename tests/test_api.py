@@ -77,8 +77,6 @@ def _raise_missing_credentials() -> Any:
 FULL_VALID_PAYLOAD = {
     "title": {"value": "Wireless Mechanical Keyboard", "confidence": 0.95},
     "category": {"value": "Electronics > Keyboards", "confidence": 0.9},
-    "price": {"value": 89.99, "confidence": 0.85},
-    "currency": {"value": "USD", "confidence": 0.85},
     "gtin": {"value": "00012345678905", "confidence": 0.9},
 }
 
@@ -107,8 +105,19 @@ def _post_image(
     filename: str = "product.jpg",
     content_type: str | None = "image/jpeg",
     content: bytes = b"fake-image-bytes",
+    price: float | None = 89.99,
+    currency: str | None = "USD",
 ):
-    return client.post("/products/process", files={"image": (filename, content, content_type)})
+    data = {}
+    if price is not None:
+        data["price"] = str(price)
+    if currency is not None:
+        data["currency"] = currency
+    return client.post(
+        "/products/process",
+        files={"image": (filename, content, content_type)},
+        data=data or None,
+    )
 
 
 @pytest.fixture()
@@ -152,8 +161,51 @@ def test_process_product_success(client: TestClient) -> None:
     body = response.json()
     assert body["outcome"] == "saved"
     assert body["product"]["title"] == "Wireless Mechanical Keyboard"
+    assert body["product"]["price"] == 89.99
+    assert body["product"]["currency"] == "USD"
+    assert body["product"]["confidence_scores"]["price"] == 1.0
     assert body["human_review"] is None
     assert body["trace"]["tool_calls"][0]["tool_name"] == "extract_product_attributes"
+
+
+def test_process_product_uses_request_price_not_extracted_price(client: TestClient) -> None:
+    payload_with_ignored_price = {
+        **FULL_VALID_PAYLOAD,
+        "price": {"value": 1.23, "confidence": 0.99},
+        "currency": {"value": "EUR", "confidence": 0.99},
+    }
+    app.dependency_overrides[get_llm_client] = lambda: FakeAgentLLMClient(
+        extraction_payload=payload_with_ignored_price,
+        turns=[("check_duplicate_product", {}), ("validate_product", {}), ("save_product", {})],
+    )
+    app.dependency_overrides[get_search_provider] = lambda: FakeSearchProvider()
+
+    response = _post_image(client, price=42.5, currency="gbp")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["outcome"] == "saved"
+    assert body["product"]["price"] == 42.5
+    assert body["product"]["currency"] == "GBP"
+
+
+def test_process_product_requires_price_and_currency(client: TestClient) -> None:
+    app.dependency_overrides[get_llm_client] = lambda: FakeAgentLLMClient()
+    app.dependency_overrides[get_search_provider] = lambda: FakeSearchProvider()
+
+    response = _post_image(client, price=None, currency=None)
+
+    assert response.status_code == 422
+
+
+def test_process_product_rejects_invalid_currency(client: TestClient) -> None:
+    app.dependency_overrides[get_llm_client] = lambda: FakeAgentLLMClient()
+    app.dependency_overrides[get_search_provider] = lambda: FakeSearchProvider()
+
+    response = _post_image(client, currency="US")
+
+    assert response.status_code == 400
+    assert "3-letter" in response.json()["detail"]
 
 
 def test_process_product_extraction_failure(client: TestClient) -> None:
@@ -239,6 +291,32 @@ def test_process_product_database_error_returns_503() -> None:
     assert response.json()["error"] == "database_error"
 
 
+
+@pytest.mark.parametrize("app_env", ["production", "development"])
+def test_database_error_detail_is_generic_outside_development(
+    monkeypatch: pytest.MonkeyPatch, app_env: str
+) -> None:
+    from ecommerce_agent.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "app_env", app_env)
+    override, engine, _session_local = _in_memory_db_override(create_tables=False)
+    app.dependency_overrides[get_db_session] = override
+
+    with TestClient(app) as test_client:
+        response = test_client.get("/products")
+
+    app.dependency_overrides.clear()
+    engine.dispose()
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["error"] == "database_error"
+    if app_env == "production":
+        assert body["detail"] == "Database unavailable."
+    else:
+        assert "no such table" in body["detail"]  # raw detail still shown locally
+
+
 # --- GET /products ---------------------------------------------------------------------------
 
 
@@ -303,6 +381,8 @@ def test_list_products_resolves_image_url_and_demo_flag(client_and_db) -> None:
     assert demo_item["is_demo"] is True
     assert demo_item["image_url"] == "/sample-images/bisiklet.jpeg"
     assert demo_item["extraction_model"] is None
+    assert demo_item["price"] == 249.0
+    assert demo_item["currency"] == "USD"
 
 
 def test_list_products_respects_limit(client_and_db) -> None:
